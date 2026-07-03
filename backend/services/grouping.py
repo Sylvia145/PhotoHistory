@@ -27,49 +27,40 @@ def analyze_project(project_id: str, db: Session) -> list[VersionChain]:
     分析项目内所有照片，自动分组为版本链。
 
     算法：
-    1. 按 DateTimeOriginal 分组（同值 = 同源候选）
-    2. 候选组内 dHash 汉明距离验证
+    1. 按 DateTimeOriginal 分组（同值 = 同源候选），无 EXIF 的统一放入 "no_exif" 组
+    2. 每组内 dHash 汉明距离聚类验证
     3. 组内按时间排序
-    4. 未分组的照片单独成链
+    4. 跨组匹配：dHash 相似的无 EXIF 链合并到有 EXIF 链中
     """
     photos = db.query(Photo).filter(Photo.project_id == project_id).all()
     if not photos:
         return []
 
-    assigned: set[str] = set()
     chains: list[VersionChain] = []
 
-    # 步骤1: 按 DateTimeOriginal 分组
+    # 步骤1: 按 DateTimeOriginal 分组（无 EXIF 的统一归入 "__no_exif__"）
     time_groups: dict[str, list[Photo]] = {}
     for p in photos:
-        key = p.exif_datetime_original or f"no_exif_{p.id}"
-        time_groups.setdefault(key, []).append(p)
+        if p.exif_datetime_original:
+            time_groups.setdefault(p.exif_datetime_original, []).append(p)
+        else:
+            time_groups.setdefault("__no_exif__", []).append(p)
 
-    # 步骤2+3: 每组内验证和排序
+    # 步骤2+3: 每组内 dHash 聚类 + 排序
     for key, group in time_groups.items():
-        if len(group) == 1:
-            # 单独成链，置信度由 _calc_confidence 根据数据质量计算
-            chains.append(VersionChain(photos=list(group),
-                                       overall_confidence=_calc_confidence(list(group))))
-            assigned.update(p.id for p in group)
-            continue
-
-        # 组内两两计算汉明距离，拆分子组
         subgroups = _cluster_by_dhash(group)
         for sg in subgroups:
-            # 组内排序
             sg.sort(key=lambda p: (
                 p.exif_datetime_original or "z",
                 p.uploaded_at or "",
             ))
-            confidence = _calc_confidence(sg)
-            chains.append(VersionChain(photos=sg, overall_confidence=confidence))
-            assigned.update(p.id for p in sg)
+            chains.append(VersionChain(
+                photos=sg,
+                overall_confidence=_calc_confidence(sg),
+            ))
 
-    # 步骤4: 未被分组的（安全网，理论上不会到这里）
-    unassigned = [p for p in photos if p.id not in assigned]
-    for p in unassigned:
-        chains.append(VersionChain(photos=[p], overall_confidence=0.3))
+    # 步骤4: 全链 dHash 合并 — 不同时间组的链如果 dHash 相似，合并
+    chains = _merge_similar_chains(chains)
 
     return chains
 
@@ -126,3 +117,58 @@ def _calc_confidence(photos: list[Photo]) -> float:
         return 0.65         # 少数有 EXIF → 中置信度
     else:
         return 0.6          # 全部无 EXIF，仅靠 dHash 分组 → 中低置信度
+
+
+def _merge_similar_chains(chains: list[VersionChain]) -> list[VersionChain]:
+    """
+    对所有链做 dHash 交叉验证，将汉明距离 ≤ 阈值的链合并。
+
+    场景：
+    1. 不同 App 编辑后 EXIF 时间丢失 → GPS 日期回退，与 DateTimeOriginal 不一致
+    2. 不同 DateTimeOriginal 值但实际同源（GPS 只有日期 vs EXIF 有完整时间戳）
+    3. EXIF 完全丢失 → 已被步骤 1 的 "__no_exif__" 组处理
+    """
+    if len(chains) <= 1:
+        return chains
+
+    # 两两比较，合并 dHash 相似的链
+    merged = list(chains)
+    changed = True
+
+    while changed:
+        changed = False
+        i = 0
+        while i < len(merged):
+            j = i + 1
+            while j < len(merged):
+                dist = _chain_min_distance(merged[i], merged[j])
+                if dist <= DHASH_SIMILARITY_THRESHOLD:
+                    # 合并 j 到 i
+                    merged[i].photos.extend(merged[j].photos)
+                    merged[i].photos.sort(key=lambda p: (
+                        p.exif_datetime_original or "z",
+                        p.uploaded_at or "",
+                    ))
+                    merged[i].overall_confidence = _calc_confidence(merged[i].photos)
+                    merged.pop(j)
+                    changed = True
+                else:
+                    j += 1
+            i += 1
+
+    return merged
+
+
+def _chain_min_distance(chain_a: VersionChain, chain_b: VersionChain) -> int:
+    """计算两条链之间的最小 dHash 汉明距离"""
+    min_dist = 999
+    for pa in chain_a.photos:
+        if not pa.dhash:
+            continue
+        for pb in chain_b.photos:
+            if not pb.dhash:
+                continue
+            dist = hamming_distance(pa.dhash, pb.dhash)
+            if dist < min_dist:
+                min_dist = dist
+    return min_dist
