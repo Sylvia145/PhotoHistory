@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 数据库文件
+*.db
+
+# 上传的图片文件
+backend/uploads/
+
+# IDE
+.vscode/
+.idea/
+
+# Node (前端，到时候再加细化)
+node_modules/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
