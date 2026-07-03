@@ -132,7 +132,7 @@ export default function ProjectDetail() {
                 <div key={p.id} className="group relative">
                   <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
                     <img
-                      src={`/api/photos/${p.id}/file?thumb=true&size=200`}
+                      src={`/api/projects/photos/${p.id}/file?thumb=true&size=200`}
                       alt={p.original_name}
                       className="w-full h-full object-cover"
                       onError={(e) => {
