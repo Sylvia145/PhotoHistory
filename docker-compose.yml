@@ -5,11 +5,27 @@ services:
     ports:
       - "18000:8000"
     volumes:
-      - ./backend:/app                    # 代码热重载
-      - backend_data:/data                # 数据库持久化（独立路径，避免嵌套挂载问题）
-      - ./backend/uploads:/app/uploads    # 上传文件持久化
+      - ./backend:/app
+      - backend_data:/data
+      - ./backend/uploads:/app/uploads
     environment:
       - DATABASE_URL=sqlite:////data/photohistory.db
+    restart: unless-stopped
+
+  frontend:
+    image: node:22-alpine
+    container_name: photohistory-frontend
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+    command: >
+      sh -c "npm install && npx vite --host 0.0.0.0 --port 5173"
+    environment:
+      - VITE_API_TARGET=http://backend:8000
+    depends_on:
+      - backend
     restart: unless-stopped
 
 volumes:
