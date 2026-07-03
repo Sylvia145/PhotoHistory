@@ -1,0 +1,17 @@
+services:
+  backend:
+    build: ./backend
+    container_name: photohistory-backend
+    ports:
+      - "18000:8000"
+    volumes:
+      - ./backend:/app                    # 代码热重载
+      - backend_data:/data                # 数据库持久化（独立路径，避免嵌套挂载问题）
+      - ./backend/uploads:/app/uploads    # 上传文件持久化
+    environment:
+      - DATABASE_URL=sqlite:////data/photohistory.db
+    restart: unless-stopped
+
+volumes:
+  backend_data:
+  backend_uploads:
