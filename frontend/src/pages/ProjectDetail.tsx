@@ -23,6 +23,7 @@ export default function ProjectDetail() {
   const [error, setError] = useState<string | null>(null)
   const [showUpload, setShowUpload] = useState(false)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  const [highlightPhotoId, setHighlightPhotoId] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     if (!id) return
@@ -65,6 +66,27 @@ export default function ProjectDetail() {
       setAnalyzing(false)
     }
   }
+
+  // 版本链节点点击 → 打开 PhotoViewer
+  const handlePhotoClick = useCallback(
+    (photoId: string) => {
+      const idx = photos.findIndex((p) => p.id === photoId)
+      if (idx !== -1) setPreviewIndex(idx)
+    },
+    [photos],
+  )
+
+  // 跳转到照片列表并高亮
+  const handleScrollToPhoto = useCallback((photoId: string) => {
+    setHighlightPhotoId(photoId)
+    setTimeout(() => {
+      const el = document.getElementById(`photo-${photoId}`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }, 60)
+    setTimeout(() => setHighlightPhotoId(null), 2500)
+  }, [])
 
   if (loading) return <p className="text-gray-400">加载中...</p>
   if (error) return <div className="text-red-500">{error}</div>
@@ -122,7 +144,12 @@ export default function ProjectDetail() {
               <h2 className="font-bold text-lg mb-4">
                 📊 版本分析结果（{chains.length} 条版本链 · {photos.length} 张照片）
               </h2>
-              <VersionChainView chains={chains} />
+              <VersionChainView
+                chains={chains}
+                onPhotoClick={handlePhotoClick}
+                onScrollToPhoto={handleScrollToPhoto}
+                highlightPhotoId={highlightPhotoId}
+              />
             </div>
           )}
 
@@ -131,7 +158,16 @@ export default function ProjectDetail() {
             <h2 className="font-bold text-lg mb-4">照片列表</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
               {photos.map((p, idx) => (
-                <div key={p.id} className="group relative cursor-pointer" onClick={() => setPreviewIndex(idx)}>
+                <div
+                  key={p.id}
+                  id={`photo-${p.id}`}
+                  className={`group relative cursor-pointer rounded-lg transition-all duration-300 ${
+                    highlightPhotoId === p.id
+                      ? 'ring-2 ring-indigo-400 ring-offset-2 animate-highlight-pulse'
+                      : ''
+                  }`}
+                  onClick={() => setPreviewIndex(idx)}
+                >
                   <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
                     <img
                       src={`/api/projects/photos/${p.id}/file?thumb=true&size=200`}
@@ -147,6 +183,22 @@ export default function ProjectDetail() {
                     {p.exif_datetime_original?.split('T')[0] || '无时间'} ·
                     {p.exif_has_all ? '✅' : '⚠️'}
                   </div>
+
+                  {/* 下载按钮 */}
+                  <a
+                    href={`/api/projects/photos/${p.id}/file?download=true`}
+                    download={p.original_name}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-1 right-8 bg-white/80 rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition hover:bg-blue-100"
+                    title="下载"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                      <polyline points="7,10 12,15 17,10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                  </a>
+
                   <button
                     onClick={async (e) => {
                       e.stopPropagation()

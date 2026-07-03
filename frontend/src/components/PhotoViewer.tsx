@@ -333,6 +333,37 @@ export default function PhotoViewer({ photos, currentIndex, onClose, onNavigate 
                 </div>
               </div>
             )}
+
+            {/* 下载原图按钮 */}
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <a
+                href={`/api/projects/photos/${photo.id}/file?download=true`}
+                download={photo.original_name}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  width: '100%',
+                  padding: '10px 12px',
+                  backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  borderRadius: 6,
+                  color: '#a5b4fc',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                  <polyline points="7,10 12,15 17,10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                下载原图
+              </a>
+            </div>
           </div>
         </div>
       </div>

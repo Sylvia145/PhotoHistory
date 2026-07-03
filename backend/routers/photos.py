@@ -1,8 +1,9 @@
 """照片管理路由"""
 
 import os
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -26,7 +27,7 @@ def list_photos(project_id: str, db: Session = Depends(get_db)):
     photos = (
         db.query(Photo)
         .filter(Photo.project_id == project_id)
-        .order_by(Photo.uploaded_at.desc())
+        .order_by(Photo.original_name)
         .all()
     )
     return [PhotoResponse.model_validate(p) for p in photos]
@@ -113,7 +114,13 @@ def delete_photo(project_id: str, photo_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/photos/{photo_id}/file")
-def get_photo_file(photo_id: str, thumb: bool = False, size: int = 400, db: Session = Depends(get_db)):
+def get_photo_file(
+    photo_id: str,
+    thumb: bool = Query(False),
+    size: int = Query(400),
+    download: bool = Query(False),
+    db: Session = Depends(get_db),
+):
     """获取照片原始文件或缩略图"""
     photo = db.query(Photo).filter(Photo.id == photo_id).first()
     if not photo:
@@ -123,4 +130,14 @@ def get_photo_file(photo_id: str, thumb: bool = False, size: int = 400, db: Sess
         raise HTTPException(status_code=404, detail="文件不存在")
 
     # TODO: 缩略图生成
-    return FileResponse(photo.stored_path, media_type=photo.mime_type)
+
+    # 下载模式：设置 Content-Disposition 响应头
+    headers = {}
+    if download:
+        encoded_filename = quote(photo.original_name)
+        headers["Content-Disposition"] = (
+            f'attachment; filename="{encoded_filename}"; '
+            f"filename*=UTF-8''{encoded_filename}"
+        )
+
+    return FileResponse(photo.stored_path, media_type=photo.mime_type, headers=headers if headers else None)
