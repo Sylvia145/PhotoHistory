@@ -4,6 +4,7 @@ import { projectsApi, photosApi, analysisApi } from '../api/client'
 import type { Photo } from '../types'
 import PhotoUpload from '../components/PhotoUpload'
 import VersionChainView from '../components/VersionChainView'
+import PhotoViewer from '../components/PhotoViewer'
 
 interface ChainData {
   root_photo: Photo | null
@@ -21,6 +22,7 @@ export default function ProjectDetail() {
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showUpload, setShowUpload] = useState(false)
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
 
   const fetchData = useCallback(async () => {
     if (!id) return
@@ -128,8 +130,8 @@ export default function ProjectDetail() {
           <div className="bg-white rounded-lg shadow-sm border p-6">
             <h2 className="font-bold text-lg mb-4">照片列表</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {photos.map((p) => (
-                <div key={p.id} className="group relative">
+              {photos.map((p, idx) => (
+                <div key={p.id} className="group relative cursor-pointer" onClick={() => setPreviewIndex(idx)}>
                   <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
                     <img
                       src={`/api/projects/photos/${p.id}/file?thumb=true&size=200`}
@@ -146,7 +148,8 @@ export default function ProjectDetail() {
                     {p.exif_has_all ? '✅' : '⚠️'}
                   </div>
                   <button
-                    onClick={async () => {
+                    onClick={async (e) => {
+                      e.stopPropagation()
                       if (!id) return
                       if (!confirm(`删除「${p.original_name}」？`)) return
                       try {
@@ -165,6 +168,16 @@ export default function ProjectDetail() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 照片预览灯箱 */}
+      {previewIndex !== null && (
+        <PhotoViewer
+          photos={photos}
+          currentIndex={previewIndex}
+          onClose={() => setPreviewIndex(null)}
+          onNavigate={(idx) => setPreviewIndex(idx)}
+        />
       )}
     </div>
   )
