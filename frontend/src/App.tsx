@@ -12,7 +12,7 @@ function App() {
             <a href="/" className="text-xl font-bold text-indigo-600">
               📷 PhotoHistory
             </a>
-            <span className="text-sm text-gray-400">照片版本管理</span>
+            <span className="text-sm text-gray-400">智能照片清理</span>
           </div>
         </header>
         <main className="max-w-6xl mx-auto px-4 py-8">

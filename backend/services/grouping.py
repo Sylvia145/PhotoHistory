@@ -12,6 +12,7 @@ from config import DHASH_SIMILARITY_THRESHOLD, DHASH_POSSIBLE_THRESHOLD
 class VersionChain:
     photos: list[Photo] = field(default_factory=list)
     overall_confidence: float = 1.0
+    group_id: str = ""                    # V2.0: 相似组标识
 
     @property
     def root_photo(self) -> Photo | None:
@@ -61,6 +62,13 @@ def analyze_project(project_id: str, db: Session) -> list[VersionChain]:
 
     # 步骤4: 全链 dHash 合并 — 不同时间组的链如果 dHash 相似，合并
     chains = _merge_similar_chains(chains)
+
+    # V2.0: 为每条链分配 group_id 并写入照片的 cleanup 字段
+    for idx, chain in enumerate(chains):
+        chain.group_id = f"group_{project_id}_{idx + 1}"
+        for rank, photo in enumerate(chain.photos, start=1):
+            photo.cleanup_group_id = chain.group_id
+            photo.cleanup_group_rank = rank
 
     return chains
 

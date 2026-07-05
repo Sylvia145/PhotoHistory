@@ -44,4 +44,12 @@ export const analysisApi = {
   versionChain: (projectId: string) => api.get(`/projects/${projectId}/version-chain`),
 }
 
+/** V2.0 清理 API */
+export const cleanupApi = {
+  scan: (projectId: string) => api.post(`/projects/${projectId}/cleanup/scan`),
+  execute: (projectId: string, photoIds: string[]) =>
+    api.post(`/projects/${projectId}/cleanup/execute`, { photo_ids: photoIds }),
+  reset: (projectId: string) => api.post(`/projects/${projectId}/cleanup/reset`),
+}
+
 export default api

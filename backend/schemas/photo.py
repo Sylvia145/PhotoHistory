@@ -21,5 +21,10 @@ class PhotoResponse(BaseModel):
     dhash: str | None
     source_type: str
     uploaded_at: datetime
+    # V2.0 清理字段
+    cleanup_status: str | None = None
+    cleanup_group_id: str | None = None
+    cleanup_group_rank: int | None = None
+    cleanup_reason: str | None = None
 
     model_config = {"from_attributes": True}

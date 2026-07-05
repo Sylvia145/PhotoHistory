@@ -62,6 +62,7 @@ def get_version_chain(project_id: str, db: Session = Depends(get_db)):
                     else "MEDIUM" if c.overall_confidence >= 0.6
                     else "LOW"
                 ),
+                "group_id": c.group_id,      # V2.0
             }
             for c in chains
         ],
@@ -83,4 +84,9 @@ def _photo_to_dict(photo):
         "quality_status": photo.quality_status,
         "source_type": photo.source_type,
         "uploaded_at": photo.uploaded_at.isoformat() if photo.uploaded_at else None,
+        # V2.0 cleanup 字段
+        "cleanup_status": photo.cleanup_status,
+        "cleanup_group_id": photo.cleanup_group_id,
+        "cleanup_group_rank": photo.cleanup_group_rank,
+        "cleanup_reason": photo.cleanup_reason,
     }

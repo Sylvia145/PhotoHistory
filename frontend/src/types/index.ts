@@ -38,6 +38,64 @@ export interface Photo {
   dhash: string | null
   source_type: string
   uploaded_at: string
+  // V2.0 清理字段
+  cleanup_status: string | null
+  cleanup_group_id: string | null
+  cleanup_group_rank: number | null
+  cleanup_reason: string | null
+}
+
+/** ===== V2.0 清理相关类型 ===== */
+
+/** 清理扫描结果中的单组照片 */
+export interface CleanupGroupPhoto extends Photo {
+  exif_make: string | null
+  exif_model: string | null
+}
+
+/** 清理扫描结果中的相似组 */
+export interface CleanupGroup {
+  group_id: string
+  photo_count: number
+  keep_count: number
+  delete_count: number
+  estimated_space_saved: number
+  confidence: number
+  confidence_label: string
+  photos: CleanupGroupPhoto[]
+}
+
+/** 清理扫描完整结果 */
+export interface CleanupScanResult {
+  project_id: string
+  group_count: number
+  total_photos: number
+  total_keep: number
+  total_delete: number
+  total_space_saved: number
+  groups: CleanupGroup[]
+}
+
+/** 删除结果中的单条 */
+export interface DeleteItem {
+  photo_id: string
+  original_name: string
+  file_size: number
+}
+
+/** 删除失败项 */
+export interface FailedItem {
+  photo_id: string
+  reason: string
+}
+
+/** 清理执行结果 */
+export interface CleanupExecuteResult {
+  deleted_count: number
+  failed_count: number
+  space_freed: number
+  deleted: DeleteItem[]
+  failed: FailedItem[]
 }
 
 /** 创建项目请求 */

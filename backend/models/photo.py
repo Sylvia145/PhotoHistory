@@ -45,4 +45,14 @@ class Photo(Base):
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     source_type: Mapped[str] = mapped_column(String(50), default="manual")
 
+    # ========== V2.0: 清理相关字段 ==========
+    cleanup_status: Mapped[str | None] = mapped_column(String(20), default=None)
+    # None=未判定, 'keep'=建议保留, 'delete'=建议删除
+    cleanup_group_id: Mapped[str | None] = mapped_column(String(100), default=None)
+    # 相似组 ID，同组照片共享此值
+    cleanup_group_rank: Mapped[int | None] = mapped_column(Integer, default=None)
+    # 组内排名: 1=最优
+    cleanup_reason: Mapped[str | None] = mapped_column(Text, default=None)
+    # 清理建议理由，可供用户阅读的文案
+
     project = relationship("Project", back_populates="photos")

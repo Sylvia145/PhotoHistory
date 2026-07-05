@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import init_db
-from routers import projects, photos, analysis
+from routers import projects, photos, analysis, cleanup
 
 
 @asynccontextmanager
@@ -18,8 +18,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="PhotoHistory",
-    description="照片版本管理工具后端 API",
-    version="0.1.0",
+    description="智能相似照片清理工具后端 API",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -36,9 +36,10 @@ app.add_middleware(
 app.include_router(projects.router)
 app.include_router(photos.router)
 app.include_router(analysis.router)
+app.include_router(cleanup.router)
 
 
 @app.get("/api/health")
 def health_check():
     """健康检查端点"""
-    return {"status": "ok", "version": "0.1.0"}
+    return {"status": "ok", "version": "2.0.0"}

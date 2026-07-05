@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { projectsApi, photosApi, analysisApi } from '../api/client'
-import type { Photo } from '../types'
+import { projectsApi, photosApi, analysisApi, cleanupApi } from '../api/client'
+import type { Photo, CleanupScanResult, CleanupExecuteResult } from '../types'
 import PhotoUpload from '../components/PhotoUpload'
 import VersionChainView from '../components/VersionChainView'
 import PhotoViewer from '../components/PhotoViewer'
+import SimilarGroupCard from '../components/SimilarGroupCard'
+import CleanupPanel from '../components/CleanupPanel'
 
 interface ChainData {
   root_photo: Photo | null
@@ -25,6 +27,12 @@ export default function ProjectDetail() {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
   const [highlightPhotoId, setHighlightPhotoId] = useState<string | null>(null)
 
+  // ===== V2.0 清理状态 =====
+  const [scanResult, setScanResult] = useState<CleanupScanResult | null>(null)
+  const [scanning, setScanning] = useState(false)
+  const [executing, setExecuting] = useState(false)
+  const [executeResult, setExecuteResult] = useState<CleanupExecuteResult | null>(null)
+
   const fetchData = useCallback(async () => {
     if (!id) return
     setError(null)
@@ -36,7 +44,6 @@ export default function ProjectDetail() {
       setProject(projRes.data)
       setPhotos(photoRes.data || [])
 
-      // 尝试获取已有分析结果
       try {
         const chainRes = await analysisApi.versionChain(id)
         setChains(chainRes.data?.chains || [])
@@ -67,13 +74,110 @@ export default function ProjectDetail() {
     }
   }
 
-  // 版本链节点点击 → 打开 PhotoViewer
+  // ===== V2.0: 扫描相似照片 =====
+  const handleScan = async () => {
+    if (!id) return
+    setScanning(true)
+    setExecuteResult(null)
+    try {
+      const res = await cleanupApi.scan(id)
+      setScanResult(res.data)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '扫描失败')
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  // ===== V2.0: 切换单张照片的 keep/delete 状态 =====
+  const handleToggle = useCallback(
+    (photoId: string, newStatus: 'keep' | 'delete') => {
+      setScanResult((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          total_keep: prev.total_keep + (newStatus === 'keep' ? 1 : -1),
+          total_delete: prev.total_delete + (newStatus === 'delete' ? 1 : -1),
+          groups: prev.groups.map((g) => {
+            const photo = g.photos.find((p) => p.id === photoId)
+            if (!photo || photo.cleanup_status === newStatus) return g
+
+            const oldStatus = photo.cleanup_status
+            const updatedPhotos = g.photos.map((p) =>
+              p.id === photoId ? { ...p, cleanup_status: newStatus } : p
+            )
+
+            const newKeep = updatedPhotos.filter((p) => p.cleanup_status === 'keep')
+            const newDelete = updatedPhotos.filter((p) => p.cleanup_status === 'delete')
+
+            return {
+              ...g,
+              keep_count: newKeep.length,
+              delete_count: newDelete.length,
+              estimated_space_saved: newDelete.reduce((s, p) => s + p.file_size, 0),
+              photos: updatedPhotos,
+            }
+          }),
+        }
+      })
+    },
+    [],
+  )
+
+  // ===== V2.0: 执行清理 =====
+  const handleExecute = async () => {
+    if (!id || !scanResult) return
+    const deleteIds = scanResult.groups
+      .flatMap((g) => g.photos)
+      .filter((p) => p.cleanup_status === 'delete')
+      .map((p) => p.id)
+    if (deleteIds.length === 0) return
+    if (!confirm(`确认删除 ${deleteIds.length} 张照片？此操作不可撤销。`)) return
+
+    setExecuting(true)
+    try {
+      const res = await cleanupApi.execute(id, deleteIds)
+      setExecuteResult(res.data)
+      setScanResult(null)
+      await fetchData()
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '执行失败')
+    } finally {
+      setExecuting(false)
+    }
+  }
+
+  // ===== V2.0: 重置清理 =====
+  const handleReset = async () => {
+    if (!id) return
+    try {
+      await cleanupApi.reset(id)
+      setScanResult(null)
+      setExecuteResult(null)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '重置失败')
+    }
+  }
+
+  // 从预览照片计算其在全量列表中的索引
+  const getPreviewIndex = useCallback(
+    (photoId: string): number => {
+      if (scanResult) {
+        const allPhotos = scanResult.groups.flatMap((g) => g.photos)
+        return allPhotos.findIndex((p) => p.id === photoId)
+      }
+      return photos.findIndex((p) => p.id === photoId)
+    },
+    [photos, scanResult],
+  )
+
+  // 版本链节点点击 → 打开预览
   const handlePhotoClick = useCallback(
     (photoId: string) => {
-      const idx = photos.findIndex((p) => p.id === photoId)
+      const idx = getPreviewIndex(photoId)
       if (idx !== -1) setPreviewIndex(idx)
     },
-    [photos],
+    [getPreviewIndex],
   )
 
   // 跳转到照片列表并高亮
@@ -111,13 +215,31 @@ export default function ProjectDetail() {
           >
             {showUpload ? '收起' : '📤 上传照片'}
           </button>
-          {photos.length >= 2 && (
+          {photos.length >= 2 && !scanResult && !executeResult && (
+            <button
+              onClick={handleScan}
+              disabled={scanning}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition"
+            >
+              {scanning ? '扫描中...' : '🔍 扫描相似照片'}
+            </button>
+          )}
+          {/* 传统分析按钮（次优先级） */}
+          {photos.length >= 2 && scanResult && (
+            <button
+              onClick={handleReset}
+              className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition"
+            >
+              ↩ 重置
+            </button>
+          )}
+          {photos.length >= 2 && !scanResult && !executeResult && (
             <button
               onClick={handleAnalyze}
               disabled={analyzing}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition"
+              className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 disabled:opacity-50 transition"
             >
-              {analyzing ? '分析中...' : '🔍 分析版本'}
+              {analyzing ? '分析中...' : '📊 版本分析'}
             </button>
           )}
         </div>
@@ -129,103 +251,167 @@ export default function ProjectDetail() {
         </div>
       )}
 
-      {/* 照片列表 */}
-      {photos.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-sm border p-12 text-center text-gray-400">
-          <p className="text-5xl mb-3">🖼</p>
-          <p className="text-lg">还没有照片</p>
-          <p className="text-sm mt-1">点击「上传照片」开始</p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {/* 版本链视图 */}
-          {chains.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm border p-6">
-              <h2 className="font-bold text-lg mb-4">
-                📊 版本分析结果（{chains.length} 条版本链 · {photos.length} 张照片）
-              </h2>
-              <VersionChainView
-                chains={chains}
-                onPhotoClick={handlePhotoClick}
-                onScrollToPhoto={handleScrollToPhoto}
-                highlightPhotoId={highlightPhotoId}
+      {/* ===== V2.0 清理结果视图 ===== */}
+      {scanResult && !executeResult && (
+        <div className="flex gap-6">
+          {/* 左侧: 相似组列表 */}
+          <div className="flex-1 space-y-4">
+            {scanResult.groups.map((group) => (
+              <SimilarGroupCard
+                key={group.group_id}
+                group={group}
+                onToggle={handleToggle}
+                onPreview={(photoId) => {
+                  const idx = getPreviewIndex(photoId)
+                  if (idx !== -1) setPreviewIndex(idx)
+                }}
               />
-            </div>
-          )}
+            ))}
+          </div>
 
-          {/* 照片缩略图网格 */}
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <h2 className="font-bold text-lg mb-4">照片列表</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {photos.map((p, idx) => (
-                <div
-                  key={p.id}
-                  id={`photo-${p.id}`}
-                  className={`group relative cursor-pointer rounded-lg transition-all duration-300 ${
-                    highlightPhotoId === p.id
-                      ? 'ring-2 ring-indigo-400 ring-offset-2 animate-highlight-pulse'
-                      : ''
-                  }`}
-                  onClick={() => setPreviewIndex(idx)}
-                >
-                  <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
-                    <img
-                      src={`/api/projects/photos/${p.id}/file?thumb=true&size=200`}
-                      alt={p.original_name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🖼</text></svg>'
-                      }}
-                    />
-                  </div>
-                  <div className="mt-1 text-xs truncate">{p.original_name}</div>
-                  <div className="text-xs text-gray-400">
-                    {p.exif_datetime_original?.split('T')[0] || '无时间'} ·
-                    {p.exif_has_all ? '✅' : '⚠️'}
-                  </div>
-
-                  {/* 下载按钮 */}
-                  <a
-                    href={`/api/projects/photos/${p.id}/file?download=true`}
-                    download={p.original_name}
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute top-1 right-8 bg-white/80 rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition hover:bg-blue-100"
-                    title="下载"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                      <polyline points="7,10 12,15 17,10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                  </a>
-
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation()
-                      if (!id) return
-                      if (!confirm(`删除「${p.original_name}」？`)) return
-                      try {
-                        await photosApi.delete(id, p.id)
-                        fetchData()
-                      } catch (e: unknown) {
-                        alert(e instanceof Error ? e.message : '删除失败')
-                      }
-                    }}
-                    className="absolute top-1 right-1 bg-white/80 rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition hover:bg-red-100"
-                  >
-                    🗑
-                  </button>
-                </div>
-              ))}
-            </div>
+          {/* 右侧: 清理面板 */}
+          <div className="w-72 shrink-0">
+            <CleanupPanel
+              result={scanResult}
+              onExecute={handleExecute}
+              onReset={handleReset}
+              executing={executing}
+              executeResult={executeResult}
+            />
           </div>
         </div>
       )}
 
-      {/* 照片预览灯箱 */}
+      {/* ===== 清理完成 ===== */}
+      {executeResult && (
+        <div className="mb-6">
+          <CleanupPanel
+            result={null}
+            onExecute={() => {}}
+            onReset={handleReset}
+            executing={false}
+            executeResult={executeResult}
+          />
+          <div className="mt-4 text-center">
+            <button
+              onClick={() => {
+                setExecuteResult(null)
+                fetchData()
+              }}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+            >
+              刷新照片列表
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== 未扫描时显示原有视图 ===== */}
+      {!scanResult && !executeResult && (
+        <>
+          {photos.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-sm border p-12 text-center text-gray-400">
+              <p className="text-5xl mb-3">🖼</p>
+              <p className="text-lg">还没有照片</p>
+              <p className="text-sm mt-1">点击「上传照片」开始</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* 版本链视图 */}
+              {chains.length > 0 && (
+                <div className="bg-white rounded-lg shadow-sm border p-6">
+                  <h2 className="font-bold text-lg mb-4">
+                    📊 版本分析结果（{chains.length} 条版本链 · {photos.length} 张照片）
+                  </h2>
+                  <VersionChainView
+                    chains={chains}
+                    onPhotoClick={handlePhotoClick}
+                    onScrollToPhoto={handleScrollToPhoto}
+                    highlightPhotoId={highlightPhotoId}
+                  />
+                </div>
+              )}
+
+              {/* 照片缩略图网格 */}
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                <h2 className="font-bold text-lg mb-4">照片列表</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {photos.map((p, idx) => (
+                    <div
+                      key={p.id}
+                      id={`photo-${p.id}`}
+                      className={`group relative cursor-pointer rounded-lg transition-all duration-300 ${
+                        highlightPhotoId === p.id
+                          ? 'ring-2 ring-indigo-400 ring-offset-2 animate-highlight-pulse'
+                          : ''
+                      }`}
+                      onClick={() => setPreviewIndex(idx)}
+                    >
+                      <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                        <img
+                          src={`/api/projects/photos/${p.id}/file?thumb=true&size=200`}
+                          alt={p.original_name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src =
+                              'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🖼</text></svg>'
+                          }}
+                        />
+                      </div>
+                      <div className="mt-1 text-xs truncate">{p.original_name}</div>
+                      <div className="text-xs text-gray-400">
+                        {p.exif_datetime_original?.split('T')[0] || '无时间'} ·{' '}
+                        {p.exif_has_all ? '✅' : '⚠️'}
+                      </div>
+
+                      {/* 下载按钮 */}
+                      <a
+                        href={`/api/projects/photos/${p.id}/file?download=true`}
+                        download={p.original_name}
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute top-1 right-8 bg-white/80 rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition hover:bg-blue-100"
+                        title="下载"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                          <polyline points="7,10 12,15 17,10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                      </a>
+
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          if (!id) return
+                          if (!confirm(`删除「${p.original_name}」？`)) return
+                          try {
+                            await photosApi.delete(id, p.id)
+                            fetchData()
+                          } catch (e: unknown) {
+                            alert(e instanceof Error ? e.message : '删除失败')
+                          }
+                        }}
+                        className="absolute top-1 right-1 bg-white/80 rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition hover:bg-red-100"
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* 照片预览灯箱（始终可用） */}
       {previewIndex !== null && (
         <PhotoViewer
-          photos={photos}
+          photos={
+            scanResult
+              ? (scanResult.groups.flatMap((g) => g.photos) as unknown as Photo[])
+              : photos
+          }
           currentIndex={previewIndex}
           onClose={() => setPreviewIndex(null)}
           onNavigate={(idx) => setPreviewIndex(idx)}
