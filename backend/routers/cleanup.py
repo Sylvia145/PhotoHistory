@@ -1,14 +1,22 @@
-"""清理路由：扫描相似组、执行删除、重置状态"""
+"""清理路由：扫描相似组、执行删除、重置状态、历史记录"""
 
+import json
 import os
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from db import get_db
 from models.project import Project
 from models.photo import Photo
-from schemas.cleanup import BatchDeleteRequest, CleanupExecuteResponse, CleanupResetResponse
+from models.cleanup_history import CleanupHistory
+from schemas.cleanup import (
+    BatchDeleteRequest,
+    CleanupExecuteResponse,
+    CleanupResetResponse,
+    CleanupHistoryResponse,
+)
 from services.grouping import analyze_project
 from services.cleanup_engine import generate_cleanup_suggestions
 
@@ -85,6 +93,11 @@ def execute_cleanup(
     if not req.photo_ids:
         raise HTTPException(status_code=400, detail="未指定要删除的照片")
 
+    # 记录清理前照片数
+    photo_count_before = db.query(Photo).filter(
+        Photo.project_id == project_id
+    ).count()
+
     deleted = []
     failed = []
 
@@ -114,6 +127,16 @@ def execute_cleanup(
         })
         db.delete(photo)
 
+    # 创建清理历史记录
+    history = CleanupHistory(
+        project_id=project_id,
+        deleted_count=len(deleted),
+        space_freed=sum(d["file_size"] for d in deleted),
+        photo_count_before=photo_count_before,
+        photo_count_after=photo_count_before - len(deleted),
+        details=json.dumps(deleted, ensure_ascii=False),
+    )
+    db.add(history)
     db.commit()
 
     return CleanupExecuteResponse(
@@ -139,6 +162,88 @@ def reset_cleanup(project_id: str, db: Session = Depends(get_db)):
             count += 1
     db.commit()
     return CleanupResetResponse(status="ok", reset_count=count)
+
+
+# ── V2.1 清理历史 ─────────────────────────────────────────────────
+
+@router.get("/{project_id}/cleanup/history")
+def get_cleanup_history(project_id: str, db: Session = Depends(get_db)):
+    """获取项目的清理历史记录"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+
+    records = (
+        db.query(CleanupHistory)
+        .filter(CleanupHistory.project_id == project_id)
+        .order_by(CleanupHistory.executed_at.desc())
+        .all()
+    )
+
+    result = []
+    for r in records:
+        details = None
+        if r.details:
+            try:
+                details = json.loads(r.details)
+            except json.JSONDecodeError:
+                details = []
+        result.append({
+            "id": r.id,
+            "project_id": r.project_id,
+            "executed_at": r.executed_at.isoformat() if r.executed_at else None,
+            "deleted_count": r.deleted_count,
+            "space_freed": r.space_freed,
+            "photo_count_before": r.photo_count_before,
+            "photo_count_after": r.photo_count_after,
+            "details": details,
+        })
+    return result
+
+
+@router.get("/{project_id}/cleanup/history/{history_id}/export")
+def export_cleanup_report(project_id: str, history_id: str, db: Session = Depends(get_db)):
+    """导出清理报告（JSON 文件下载）"""
+    record = (
+        db.query(CleanupHistory)
+        .filter(CleanupHistory.id == history_id, CleanupHistory.project_id == project_id)
+        .first()
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="历史记录不存在")
+
+    details = []
+    if record.details:
+        try:
+            details = json.loads(record.details)
+        except json.JSONDecodeError:
+            details = []
+
+    import urllib.parse
+
+    report = {
+        "report_type": "PhotoHistory 清理报告",
+        "project_id": project_id,
+        "executed_at": record.executed_at.isoformat() if record.executed_at else None,
+        "summary": {
+            "deleted_count": record.deleted_count,
+            "space_freed_bytes": record.space_freed,
+            "space_freed_mb": round(record.space_freed / 1024 / 1024, 2),
+            "photo_count_before": record.photo_count_before,
+            "photo_count_after": record.photo_count_after,
+        },
+        "deleted_photos": details,
+    }
+
+    filename = f"cleanup_report_{record.executed_at.strftime('%Y%m%d_%H%M%S') if record.executed_at else history_id}.json"
+    encoded_filename = urllib.parse.quote(filename)
+
+    return JSONResponse(
+        content=report,
+        headers={
+            "Content-Disposition": f'attachment; filename="{encoded_filename}"; filename*=UTF-8\'\'{encoded_filename}',
+        },
+    )
 
 
 def _photo_to_cleanup_dict(photo: Photo) -> dict:

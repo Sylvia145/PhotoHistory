@@ -26,9 +26,27 @@ function formatSize(bytes: number): string {
 export default function SimilarGroupCard({ group, onToggle, onPreview }: Props) {
   const keepPhotos = group.photos.filter((p) => p.cleanup_status === 'keep')
   const deletePhotos = group.photos.filter((p) => p.cleanup_status === 'delete')
+  const wechatCount = group.photos.filter(
+    (p) => p.source_type === 'wechat_compressed'
+  ).length
 
   return (
     <div className="bg-white rounded-lg shadow-sm border p-4">
+      {/* 微信压缩图警告横幅 */}
+      {wechatCount > 0 && (
+        <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+          <span className="text-base shrink-0">⚠️</span>
+          <div>
+            <div className="text-sm font-medium text-red-700">
+              本组包含 {wechatCount} 张微信压缩图
+            </div>
+            <div className="text-xs text-red-500 mt-0.5">
+              微信传输时未选择「原图」会导致 EXIF 丢失和画质下降，已自动标记建议删除
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 组头 */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
@@ -99,10 +117,16 @@ function PhotoCard({
   onToggle: () => void
   onPreview: () => void
 }) {
+  const isWechat = photo.source_type === 'wechat_compressed'
+
   return (
     <div
       className={`relative rounded-lg overflow-hidden border-2 ${
-        status === 'keep' ? 'border-green-400' : 'border-red-300'
+        isWechat
+          ? 'border-red-300 border-dashed animate-pulse'
+          : status === 'keep'
+          ? 'border-green-400'
+          : 'border-red-300'
       }`}
     >
       {/* 缩略图 */}
@@ -122,6 +146,13 @@ function PhotoCard({
         />
       </div>
 
+      {/* 微信压缩遮罩角标 */}
+      {isWechat && (
+        <div className="absolute top-0 left-0 right-0 bg-red-500/80 text-white text-xs text-center py-0.5 font-medium">
+          ⚠️ 微信压缩
+        </div>
+      )}
+
       {/* 信息 */}
       <div className="p-1.5">
         <div className="text-xs font-medium truncate leading-tight" title={photo.original_name}>
@@ -138,9 +169,9 @@ function PhotoCard({
           {photo.exif_datetime_original?.split('T')[0] || '无时间'} ·{' '}
           {formatSize(photo.file_size)}
         </div>
-        {photo.source_type === 'wechat_compressed' && (
-          <span className="text-xs bg-amber-100 text-amber-600 px-1 rounded leading-tight mt-0.5 inline-block">
-            ⚠️ 微信压缩
+        {isWechat && !photo.exif_has_all && (
+          <span className="text-xs bg-red-100 text-red-600 px-1 rounded leading-tight mt-0.5 inline-block">
+            EXIF 丢失
           </span>
         )}
       </div>

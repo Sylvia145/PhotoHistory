@@ -34,3 +34,19 @@ class CleanupResetResponse(BaseModel):
     """重置清理状态的响应"""
     status: str
     reset_count: int
+
+
+# ── V2.1 清理历史 ────────────────────────────────────────────────
+
+class CleanupHistoryResponse(BaseModel):
+    """历史记录响应"""
+    id: str
+    project_id: str
+    executed_at: str
+    deleted_count: int
+    space_freed: int
+    photo_count_before: int
+    photo_count_after: int
+    details: list[dict] | None = None
+
+    model_config = {"from_attributes": True}

@@ -50,6 +50,17 @@ export const cleanupApi = {
   execute: (projectId: string, photoIds: string[]) =>
     api.post(`/projects/${projectId}/cleanup/execute`, { photo_ids: photoIds }),
   reset: (projectId: string) => api.post(`/projects/${projectId}/cleanup/reset`),
+  /** V2.1 清理历史 */
+  history: (projectId: string) =>
+    api.get(`/projects/${projectId}/cleanup/history`),
+  exportReport: (projectId: string, historyId: string) =>
+    api.get(`/projects/${projectId}/cleanup/history/${historyId}/export`),
+}
+
+/** V2.1 搜索 API */
+export const searchApi = {
+  search: (projectId: string, query: string) =>
+    api.get(`/projects/${projectId}/search`, { params: { q: query } }),
 }
 
 export default api

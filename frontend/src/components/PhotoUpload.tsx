@@ -8,8 +8,9 @@ interface Props {
 
 interface UploadItem {
   file: File
-  status: 'pending' | 'uploading' | 'success' | 'error'
+  status: 'pending' | 'uploading' | 'success' | 'warning' | 'error'
   error?: string
+  warning?: string
 }
 
 export default function PhotoUpload({ projectId, onUploaded }: Props) {
@@ -40,10 +41,25 @@ export default function PhotoUpload({ projectId, onUploaded }: Props) {
         idx === i ? { ...item, status: 'uploading' as const } : item
       ))
       try {
-        await photosApi.upload(projectId, [items[i].file])
-        setItems((prev) => prev.map((item, idx) =>
-          idx === i ? { ...item, status: 'success' as const } : item
-        ))
+        const res = await photosApi.upload(projectId, [items[i].file])
+        // 检查上传的照片是否有微信压缩警告
+        const uploadedPhotos = res.data?.photos || []
+        const hasWechatWarning = uploadedPhotos.some(
+          (p: { source_type?: string }) => p.source_type === 'wechat_compressed'
+        )
+        if (hasWechatWarning) {
+          setItems((prev) => prev.map((item, idx) =>
+            idx === i ? {
+              ...item,
+              status: 'warning' as const,
+              warning: '微信压缩图，建议发送原图',
+            } : item
+          ))
+        } else {
+          setItems((prev) => prev.map((item, idx) =>
+            idx === i ? { ...item, status: 'success' as const } : item
+          ))
+        }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : '上传失败'
         setItems((prev) => prev.map((item, idx) =>
@@ -91,6 +107,7 @@ export default function PhotoUpload({ projectId, onUploaded }: Props) {
               key={idx}
               className={`flex items-center justify-between px-3 py-2 rounded text-sm ${
                 item.status === 'error' ? 'bg-red-50' :
+                item.status === 'warning' ? 'bg-yellow-50 border border-yellow-200' :
                 item.status === 'success' ? 'bg-green-50' : 'bg-gray-50'
               }`}
             >
@@ -98,6 +115,7 @@ export default function PhotoUpload({ projectId, onUploaded }: Props) {
                 <span>
                   {item.status === 'uploading' && '⏳'}
                   {item.status === 'success' && '✅'}
+                  {item.status === 'warning' && '⚠️'}
                   {item.status === 'error' && '❌'}
                   {item.status === 'pending' && '📄'}
                 </span>
@@ -109,6 +127,9 @@ export default function PhotoUpload({ projectId, onUploaded }: Props) {
               <div className="flex items-center gap-2 shrink-0 ml-2">
                 {item.error && (
                   <span className="text-red-500 text-xs">{item.error}</span>
+                )}
+                {item.warning && (
+                  <span className="text-yellow-600 text-xs">{item.warning}</span>
                 )}
                 {item.status === 'pending' && (
                   <button onClick={() => removeItem(idx)} className="text-gray-400 hover:text-red-500">

@@ -104,6 +104,33 @@ export interface CreateProjectRequest {
   description?: string
 }
 
+/** V2.1 清理历史记录 */
+export interface CleanupHistoryRecord {
+  id: string
+  project_id: string
+  executed_at: string | null
+  deleted_count: number
+  space_freed: number
+  photo_count_before: number
+  photo_count_after: number
+  details: DeleteItem[] | null
+}
+
+/** 清理报告 */
+export interface CleanupReport {
+  report_type: string
+  project_id: string
+  executed_at: string | null
+  summary: {
+    deleted_count: number
+    space_freed_bytes: number
+    space_freed_mb: number
+    photo_count_before: number
+    photo_count_after: number
+  }
+  deleted_photos: DeleteItem[]
+}
+
 /** API 统一响应 */
 export interface ApiResponse<T> {
   data: T | null

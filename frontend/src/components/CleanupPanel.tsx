@@ -1,4 +1,5 @@
 import type { CleanupScanResult, CleanupExecuteResult } from '../types'
+import BeforeAfterPreview from './BeforeAfterPreview'
 
 interface Props {
   result: CleanupScanResult | null
@@ -68,6 +69,11 @@ export default function CleanupPanel({
             {formatSize(result.total_space_saved)}
           </strong>
         </div>
+      </div>
+
+      {/* V2.1 清理预览 */}
+      <div className="mb-3">
+        <BeforeAfterPreview groups={result.groups} />
       </div>
 
       <div className="flex gap-2">

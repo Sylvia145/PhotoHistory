@@ -141,3 +141,73 @@ def get_photo_file(
         )
 
     return FileResponse(photo.stored_path, media_type=photo.mime_type, headers=headers if headers else None)
+
+
+# ── V2.1 对比端点 ─────────────────────────────────────────────────
+
+# 独立路由（不带 /api/projects 前缀），因为对比是跨照片的
+compare_router = APIRouter(prefix="/api/photos", tags=["compare"])
+
+
+@compare_router.get("/{photo_id}/compare/{other_id}")
+def compare_photos(photo_id: str, other_id: str, db: Session = Depends(get_db)):
+    """获取两张照片的对比元数据"""
+    from services.hash_service import hamming_distance
+
+    photo_a = db.query(Photo).filter(Photo.id == photo_id).first()
+    photo_b = db.query(Photo).filter(Photo.id == other_id).first()
+
+    if not photo_a:
+        raise HTTPException(status_code=404, detail="照片 A 不存在")
+    if not photo_b:
+        raise HTTPException(status_code=404, detail="照片 B 不存在")
+
+    # 计算 dHash 距离
+    dhash_dist = None
+    if photo_a.dhash and photo_b.dhash:
+        dhash_dist = hamming_distance(photo_a.dhash, photo_b.dhash)
+
+    # 文件大小比
+    size_ratio = None
+    if photo_a.file_size and photo_b.file_size and photo_b.file_size > 0:
+        size_ratio = round(photo_a.file_size / photo_b.file_size, 2)
+
+    # 时间差（秒）
+    time_diff = None
+    if photo_a.exif_datetime_original and photo_b.exif_datetime_original:
+        try:
+            from datetime import datetime
+            ta = datetime.fromisoformat(photo_a.exif_datetime_original)
+            tb = datetime.fromisoformat(photo_b.exif_datetime_original)
+            time_diff = abs((ta - tb).total_seconds())
+        except (ValueError, TypeError):
+            pass
+
+    return {
+        "photo_a": _photo_to_compare_dict(photo_a),
+        "photo_b": _photo_to_compare_dict(photo_b),
+        "dhash_distance": dhash_dist,
+        "size_ratio": size_ratio,
+        "same_resolution": (
+            photo_a.resolution_w == photo_b.resolution_w
+            and photo_a.resolution_h == photo_b.resolution_h
+        ),
+        "time_diff_seconds": time_diff,
+    }
+
+
+def _photo_to_compare_dict(photo: Photo) -> dict:
+    return {
+        "id": photo.id,
+        "original_name": photo.original_name,
+        "file_size": photo.file_size,
+        "mime_type": photo.mime_type,
+        "resolution_w": photo.resolution_w,
+        "resolution_h": photo.resolution_h,
+        "exif_datetime_original": photo.exif_datetime_original,
+        "exif_make": photo.exif_make,
+        "exif_model": photo.exif_model,
+        "exif_has_all": photo.exif_has_all,
+        "dhash": photo.dhash,
+        "source_type": photo.source_type,
+    }

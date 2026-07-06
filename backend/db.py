@@ -17,6 +17,7 @@ def init_db():
     """创建所有表"""
     from models.project import Project  # noqa: F401
     from models.photo import Photo  # noqa: F401
+    from models.cleanup_history import CleanupHistory  # noqa: F401
     Base.metadata.create_all(bind=engine)
 
 
