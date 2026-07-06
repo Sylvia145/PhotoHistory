@@ -18,3 +18,7 @@ ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/heif", "image/heic", "im
 # 版本分组参数
 DHASH_SIMILARITY_THRESHOLD = 10       # 汉明距离 ≤ 10 → 确认同源
 DHASH_POSSIBLE_THRESHOLD = 20         # 汉明距离 11-20 → 可能同源
+
+# MCP Server
+MCP_SERVER_NAME = os.getenv("PHOTOHISTORY_MCP_NAME", "PhotoHistory")
+MCP_SERVER_VERSION = "3.0.0"

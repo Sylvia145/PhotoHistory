@@ -1,5 +1,6 @@
 """PhotoHistory 后端应用入口"""
 
+import os as _os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -38,6 +39,12 @@ app.include_router(photos.router)
 app.include_router(cleanup.router)
 app.include_router(search.router)
 app.include_router(photos.compare_router)
+
+# ── V3.0 MCP HTTP 子应用（可选，环境变量 PHOTOHISTORY_MCP_HTTP=1 启用）──
+if _os.getenv("PHOTOHISTORY_MCP_HTTP", "0") == "1":
+    from mcp_server.server import mcp
+
+    app.mount("/mcp", mcp.streamable_http_app())
 
 
 @app.get("/api/health")
