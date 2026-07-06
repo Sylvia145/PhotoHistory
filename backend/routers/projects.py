@@ -59,7 +59,6 @@ def get_project(project_id: str, db: Session = Depends(get_db)):
         photo_count=len(project.photos),
         created_at=project.created_at,
         updated_at=project.updated_at,
-        version_chains=[],
     )
 
 

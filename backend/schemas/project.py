@@ -26,4 +26,4 @@ class ProjectResponse(BaseModel):
 
 
 class ProjectDetail(ProjectResponse):
-    version_chains: list = []  # 版本链数据，后面细化类型
+    pass

@@ -38,12 +38,6 @@ export const photosApi = {
     api.delete(`/projects/${projectId}/photos/${photoId}`),
 }
 
-/** 分析 API */
-export const analysisApi = {
-  analyze: (projectId: string) => api.post(`/projects/${projectId}/analyze`),
-  versionChain: (projectId: string) => api.get(`/projects/${projectId}/version-chain`),
-}
-
 /** V2.0 清理 API */
 export const cleanupApi = {
   scan: (projectId: string) => api.post(`/projects/${projectId}/cleanup/scan`),

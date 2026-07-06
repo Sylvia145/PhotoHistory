@@ -8,18 +8,6 @@ export interface Project {
   updated_at: string
 }
 
-/** 项目详情（含版本链） */
-export interface ProjectDetail extends Project {
-  version_chains: VersionChain[]
-}
-
-/** 版本链 */
-export interface VersionChain {
-  root_photo: Photo
-  versions: Photo[]
-  overall_confidence: number
-}
-
 /** 照片 */
 export interface Photo {
   id: string

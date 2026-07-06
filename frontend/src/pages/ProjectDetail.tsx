@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { projectsApi, photosApi, analysisApi, cleanupApi, searchApi } from '../api/client'
+import { projectsApi, photosApi, cleanupApi, searchApi } from '../api/client'
 import type { Photo, CleanupScanResult, CleanupExecuteResult } from '../types'
 import PhotoUpload from '../components/PhotoUpload'
-import VersionChainView from '../components/VersionChainView'
 import PhotoViewer from '../components/PhotoViewer'
 import PhotoCompare from '../components/PhotoCompare'
 import SimilarGroupCard from '../components/SimilarGroupCard'
@@ -11,25 +10,14 @@ import CleanupPanel from '../components/CleanupPanel'
 import SearchBar from '../components/SearchBar'
 import CleanupHistoryPanel from '../components/CleanupHistoryPanel'
 
-interface ChainData {
-  root_photo: Photo | null
-  versions: Photo[]
-  overall_confidence: number
-  confidence_label: string
-}
-
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>()
   const [project, setProject] = useState<{ name: string; description: string | null } | null>(null)
   const [photos, setPhotos] = useState<Photo[]>([])
-  const [chains, setChains] = useState<ChainData[]>([])
   const [loading, setLoading] = useState(true)
-  const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showUpload, setShowUpload] = useState(false)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
-  const [highlightPhotoId, setHighlightPhotoId] = useState<string | null>(null)
-
   // ===== V2.0 清理状态 =====
   const [scanResult, setScanResult] = useState<CleanupScanResult | null>(null)
   const [scanning, setScanning] = useState(false)
@@ -55,13 +43,6 @@ export default function ProjectDetail() {
       ])
       setProject(projRes.data)
       setPhotos(photoRes.data || [])
-
-      try {
-        const chainRes = await analysisApi.versionChain(id)
-        setChains(chainRes.data?.chains || [])
-      } catch {
-        setChains([])
-      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '加载失败')
     } finally {
@@ -72,19 +53,6 @@ export default function ProjectDetail() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
-
-  const handleAnalyze = async () => {
-    if (!id) return
-    setAnalyzing(true)
-    try {
-      const res = await analysisApi.analyze(id)
-      setChains(res.data?.chains || [])
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : '分析失败')
-    } finally {
-      setAnalyzing(false)
-    }
-  }
 
   // ===== V2.0: 扫描相似照片 =====
   const handleScan = async () => {
@@ -243,27 +211,6 @@ export default function ProjectDetail() {
     [displayPhotos, scanResult],
   )
 
-  // 版本链节点点击 → 打开预览
-  const handlePhotoClick = useCallback(
-    (photoId: string) => {
-      const idx = getPreviewIndex(photoId)
-      if (idx !== -1) setPreviewIndex(idx)
-    },
-    [getPreviewIndex],
-  )
-
-  // 跳转到照片列表并高亮
-  const handleScrollToPhoto = useCallback((photoId: string) => {
-    setHighlightPhotoId(photoId)
-    setTimeout(() => {
-      const el = document.getElementById(`photo-${photoId}`)
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }
-    }, 60)
-    setTimeout(() => setHighlightPhotoId(null), 2500)
-  }, [])
-
   if (loading) return <p className="text-gray-400">加载中...</p>
   if (error) return <div className="text-red-500">{error}</div>
   if (!project) return <div className="text-gray-400">项目不存在</div>
@@ -303,15 +250,6 @@ export default function ProjectDetail() {
               className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition"
             >
               ↩ 重置
-            </button>
-          )}
-          {photos.length >= 2 && !scanResult && !executeResult && (
-            <button
-              onClick={handleAnalyze}
-              disabled={analyzing}
-              className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 disabled:opacity-50 transition"
-            >
-              {analyzing ? '分析中...' : '📊 版本分析'}
             </button>
           )}
           {/* V2.1 对比按钮 */}
@@ -427,21 +365,6 @@ export default function ProjectDetail() {
             </div>
           ) : (
             <div className="space-y-6">
-              {/* 版本链视图 */}
-              {chains.length > 0 && (
-                <div className="bg-white rounded-lg shadow-sm border p-6">
-                  <h2 className="font-bold text-lg mb-4">
-                    📊 版本分析结果（{chains.length} 条版本链 · {photos.length} 张照片）
-                  </h2>
-                  <VersionChainView
-                    chains={chains}
-                    onPhotoClick={handlePhotoClick}
-                    onScrollToPhoto={handleScrollToPhoto}
-                    highlightPhotoId={highlightPhotoId}
-                  />
-                </div>
-              )}
-
               <div className="bg-white rounded-lg shadow-sm border p-6">
                 <h2 className="font-bold text-lg mb-4">
                   照片列表
@@ -456,11 +379,7 @@ export default function ProjectDetail() {
                     <div
                       key={p.id}
                       id={`photo-${p.id}`}
-                      className={`group relative cursor-pointer rounded-lg transition-all duration-300 ${
-                        highlightPhotoId === p.id
-                          ? 'ring-2 ring-indigo-400 ring-offset-2 animate-highlight-pulse'
-                          : ''
-                      }`}
+                      className="group relative cursor-pointer rounded-lg transition-all duration-300"
                       onClick={() => setPreviewIndex(idx)}
                     >
                       <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative">

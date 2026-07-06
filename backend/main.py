@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import init_db
-from routers import projects, photos, analysis, cleanup, search
+from routers import projects, photos, cleanup, search
 
 
 @asynccontextmanager
@@ -35,7 +35,6 @@ app.add_middleware(
 # 注册路由
 app.include_router(projects.router)
 app.include_router(photos.router)
-app.include_router(analysis.router)
 app.include_router(cleanup.router)
 app.include_router(search.router)
 app.include_router(photos.compare_router)
