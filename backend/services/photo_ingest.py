@@ -12,6 +12,7 @@ from models.photo import Photo
 from services.quality_check import check_quality
 from services.exif_service import extract_exif
 from services.hash_service import compute_dhash, compute_phash
+from services.quality_scorer import score_photo
 
 
 @dataclass
@@ -75,6 +76,9 @@ def ingest_photo(
     dhash = compute_dhash(stored_path)
     phash = compute_phash(stored_path)
 
+    # 5.5. AI 质量评分
+    scores = score_photo(stored_path, file_size)
+
     # 6. 写入数据库
     photo = Photo(
         id=photo_id,
@@ -91,6 +95,9 @@ def ingest_photo(
         exif_has_all=exif.has_all,
         quality_status=quality.status,
         quality_reason=quality.reason,
+        ai_score_sharpness=scores.sharpness if scores else None,
+        ai_score_aesthetic=scores.aesthetic if scores else None,
+        ai_score_overall=scores.overall if scores else None,
         phash=phash,
         dhash=dhash,
         source_type=quality.source_type,

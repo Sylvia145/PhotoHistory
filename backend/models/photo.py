@@ -37,6 +37,14 @@ class Photo(Base):
     quality_status: Mapped[str] = mapped_column(String(20), default="ok")
     quality_reason: Mapped[str | None] = mapped_column(Text, default=None)
 
+    # ========== V3.0: AI 质量评分 ==========
+    ai_score_sharpness: Mapped[float | None] = mapped_column(Float, default=None)
+    # AI 清晰度评分 (0-10): Laplacian 方差法
+    ai_score_aesthetic: Mapped[float | None] = mapped_column(Float, default=None)
+    # AI 美学评分 (0-10): 分辨率+对比度+宽高比+曝光
+    ai_score_overall: Mapped[float | None] = mapped_column(Float, default=None)
+    # AI 综合评分 (0-10): 清晰度×0.4 + 美学×0.3 + 压缩×0.3
+
     # 感知哈希
     phash: Mapped[str | None] = mapped_column(String(64), default=None)
     dhash: Mapped[str | None] = mapped_column(String(64), default=None)

@@ -23,6 +23,10 @@ export interface Photo {
   exif_has_all: boolean
   quality_status: string
   quality_reason: string | null
+  // V3.0 AI 质量评分
+  ai_score_sharpness?: number
+  ai_score_aesthetic?: number
+  ai_score_overall?: number
   dhash: string | null
   source_type: string
   uploaded_at: string

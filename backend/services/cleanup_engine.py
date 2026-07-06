@@ -13,7 +13,7 @@ def generate_cleanup_suggestions(photos_in_group: list[Photo]) -> None:
     规则优先级（从高到低）：
     1. 单张照片 → 建议保留
     2. 微信压缩图 — 同组有原图时建议删除
-    3. 同质照片 → 保留文件最大的那张，其余建议删除
+    3. 同质照片 → 按 AI 综合评分降序（评分高的保留），无评分时回退到文件大小
     """
     if len(photos_in_group) <= 1:
         for p in photos_in_group:
@@ -31,12 +31,17 @@ def generate_cleanup_suggestions(photos_in_group: list[Photo]) -> None:
             p.cleanup_status = "delete"
             p.cleanup_reason = "微信压缩图，同组存在原图版本，EXIF信息丢失"
 
-    # 规则: 按文件大小排序，最大的 = 保留，其余 = 删除（除非已被微信规则标记）
-    sorted_by_size = sorted(
-        photos_in_group, key=lambda p: p.file_size or 0, reverse=True
-    )
+    # 规则: 按 AI 综合评分排序（降级到文件大小）
+    def _rank_key(p: Photo) -> tuple[int, float]:
+        """排序键：已评分照片按 AI 评分降序；未评分回退到文件大小。"""
+        if p.ai_score_overall is not None:
+            return (0, -p.ai_score_overall)  # 已评分优先
+        else:
+            return (1, -(p.file_size or 0))  # 未评分用文件大小
 
-    for rank, p in enumerate(sorted_by_size, start=1):
+    sorted_photos = sorted(photos_in_group, key=_rank_key)
+
+    for rank, p in enumerate(sorted_photos, start=1):
         if p.cleanup_status is not None:
             continue  # 已被微信规则标记
         if rank == 1:
@@ -53,6 +58,8 @@ def _build_reason(photo: Photo, rank: int = 1, is_single: bool = False) -> str:
         return "单独照片，无相似版本"
 
     parts = [f"组内排名 #{rank}"]
+    if photo.ai_score_overall is not None:
+        parts.append(f"AI综合评分 {photo.ai_score_overall}/10")
     if photo.exif_has_all:
         parts.append("EXIF完整")
     else:

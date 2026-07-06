@@ -169,6 +169,21 @@ function PhotoCard({
           {photo.exif_datetime_original?.split('T')[0] || '无时间'} ·{' '}
           {formatSize(photo.file_size)}
         </div>
+        {/* V3.0 AI 评分徽章 */}
+        {photo.ai_score_overall != null && (
+          <span
+            className={`text-xs px-1 rounded leading-tight mt-0.5 inline-block ${
+              photo.ai_score_overall >= 7
+                ? 'bg-green-100 text-green-700'
+                : photo.ai_score_overall >= 4
+                  ? 'bg-yellow-100 text-yellow-700'
+                  : 'bg-red-100 text-red-600'
+            }`}
+            title={`AI 综合评分: ${photo.ai_score_overall}/10 (清晰度 ${photo.ai_score_sharpness} · 美学 ${photo.ai_score_aesthetic})`}
+          >
+            AI {photo.ai_score_overall}
+          </span>
+        )}
         {isWechat && !photo.exif_has_all && (
           <span className="text-xs bg-red-100 text-red-600 px-1 rounded leading-tight mt-0.5 inline-block">
             EXIF 丢失

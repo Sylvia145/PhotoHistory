@@ -208,6 +208,9 @@ def _photo_to_compare_dict(photo: Photo) -> dict:
         "exif_make": photo.exif_make,
         "exif_model": photo.exif_model,
         "exif_has_all": photo.exif_has_all,
+        "ai_score_sharpness": photo.ai_score_sharpness,
+        "ai_score_aesthetic": photo.ai_score_aesthetic,
+        "ai_score_overall": photo.ai_score_overall,
         "dhash": photo.dhash,
         "source_type": photo.source_type,
     }

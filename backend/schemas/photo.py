@@ -18,6 +18,10 @@ class PhotoResponse(BaseModel):
     exif_has_all: bool
     quality_status: str
     quality_reason: str | None
+    # V3.0 AI 质量评分
+    ai_score_sharpness: float | None = None
+    ai_score_aesthetic: float | None = None
+    ai_score_overall: float | None = None
     dhash: str | None
     source_type: str
     uploaded_at: datetime

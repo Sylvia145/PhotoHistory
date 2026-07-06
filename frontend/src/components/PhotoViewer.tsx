@@ -324,6 +324,34 @@ export default function PhotoViewer({ photos, currentIndex, onClose, onNavigate 
                 <div style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>{photo.quality_reason}</div>
               )}
             </div>
+            {/* V3.0 AI 质量评分 */}
+            {photo.ai_score_overall != null && (
+              <div>
+                <div style={{ color: '#9ca3af', fontSize: 12, marginBottom: 4 }}>AI 综合评分</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      padding: '2px 10px',
+                      borderRadius: 4,
+                      fontSize: 18,
+                      fontWeight: 700,
+                      ...(photo.ai_score_overall >= 7
+                        ? { backgroundColor: '#166534', color: '#bbf7d0' }
+                        : photo.ai_score_overall >= 4
+                          ? { backgroundColor: '#854d0e', color: '#fef08a' }
+                          : { backgroundColor: '#991b1b', color: '#fecaca' }),
+                    }}
+                  >
+                    {photo.ai_score_overall}
+                  </span>
+                  <span style={{ color: '#6b7280', fontSize: 11 }}>/ 10</span>
+                </div>
+                <div style={{ color: '#6b7280', fontSize: 11, marginTop: 4 }}>
+                  清晰度 {photo.ai_score_sharpness} · 美学 {photo.ai_score_aesthetic}
+                </div>
+              </div>
+            )}
             <InfoRow label="EXIF 信息" value={photo.exif_has_all ? '✅ 完整' : '⚠️ 缺失'} />
             {photo.dhash && (
               <div>
