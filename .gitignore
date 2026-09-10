@@ -22,6 +22,9 @@ docs/
 node_modules/
 dist/
 
+# 环境变量（含 API Key）
+.env
+
 # OS
 .DS_Store
 Thumbs.db

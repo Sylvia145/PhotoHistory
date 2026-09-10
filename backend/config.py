@@ -22,3 +22,17 @@ DHASH_POSSIBLE_THRESHOLD = 20         # 汉明距离 11-20 → 可能同源
 # MCP Server
 MCP_SERVER_NAME = os.getenv("PHOTOHISTORY_MCP_NAME", "PhotoHistory")
 MCP_SERVER_VERSION = "3.0.0"
+
+# ── V3.0 Agent: LLM Provider 配置 ────────────────────────────
+LLM_PROVIDER = os.getenv("PHOTOHISTORY_LLM_PROVIDER", "anthropic")
+# 可选: "anthropic" | "openai_compat"
+LLM_MODEL = os.getenv("PHOTOHISTORY_LLM_MODEL", "claude-sonnet-4-6")
+# 推荐: claude-sonnet-4-6（性价比）| claude-opus-4-8（最强推理）
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+LLM_MAX_TOKENS = int(os.getenv("PHOTOHISTORY_LLM_MAX_TOKENS", "16000"))
+LLM_TEMPERATURE = float(os.getenv("PHOTOHISTORY_LLM_TEMPERATURE", "0.7"))
+# Agent 编排参数
+AGENT_MAX_ITERATIONS = int(os.getenv("PHOTOHISTORY_AGENT_MAX_ITERATIONS", "15"))
+AGENT_CONFIRM_TIMEOUT = int(os.getenv("PHOTOHISTORY_AGENT_CONFIRM_TIMEOUT", "120"))

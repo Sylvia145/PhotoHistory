@@ -1,3 +1,46 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ===== V3.0 Agent 聊天动画 ===== */
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 思考中点动画 */
+.thinking-dots {
+  display: inline-block;
+}
+
+.thinking-dots::after {
+  display: inline-block;
+  animation: dotPulse 1.4s infinite;
+  content: '...';
+  clip-path: inset(0 0 0 0);
+}
+
+@keyframes dotPulse {
+  0%   { clip-path: inset(0 100% 0 0); }
+  33%  { clip-path: inset(0 66% 0 0); }
+  66%  { clip-path: inset(0 33% 0 0); }
+  100% { clip-path: inset(0 0 0 0); }
+}
+
+/* V3.1: 骨架屏脉冲动画 */
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* V3.1: 渐入动画 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}

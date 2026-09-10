@@ -9,6 +9,7 @@ import SimilarGroupCard from '../components/SimilarGroupCard'
 import CleanupPanel from '../components/CleanupPanel'
 import SearchBar from '../components/SearchBar'
 import CleanupHistoryPanel from '../components/CleanupHistoryPanel'
+import AgentChat from '../components/AgentChat'
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>()
@@ -32,6 +33,8 @@ export default function ProjectDetail() {
   const [comparePhotos, setComparePhotos] = useState<[Photo, Photo] | null>(null)
   const [selectedForCompare, setSelectedForCompare] = useState<Set<string>>(new Set())
   const [showHistory, setShowHistory] = useState(false)
+  // ===== V3.0 Agent 聊天面板 =====
+  const [showAgentChat, setShowAgentChat] = useState(false)
 
   const fetchData = useCallback(async () => {
     if (!id) return
@@ -504,6 +507,46 @@ export default function ProjectDetail() {
       {comparePhotos && (
         <PhotoCompare photos={comparePhotos} onClose={handleCompareClose} />
       )}
+
+      {/* ===== V3.0 Agent 聊天入口 ===== */}
+      {/* 悬浮聊天按钮 */}
+      {!showAgentChat && (
+        <button
+          onClick={() => setShowAgentChat(true)}
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: '#6366f1',
+            color: '#fff',
+            border: 'none',
+            boxShadow: '0 4px 16px rgba(99,102,241,0.4)',
+            cursor: 'pointer',
+            fontSize: 24,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9997,
+            transition: 'transform 0.2s',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          title="AI 助手"
+        >
+          🤖
+        </button>
+      )}
+
+      {/* Agent 聊天面板 */}
+      <AgentChat
+        projectId={id || null}
+        projectName={project?.name || undefined}
+        isOpen={showAgentChat}
+        onClose={() => setShowAgentChat(false)}
+      />
     </div>
   )
 }

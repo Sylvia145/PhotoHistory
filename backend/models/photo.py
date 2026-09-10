@@ -63,4 +63,10 @@ class Photo(Base):
     cleanup_reason: Mapped[str | None] = mapped_column(Text, default=None)
     # 清理建议理由，可供用户阅读的文案
 
+    # ========== V3.1: 软删除字段 ==========
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    # 软删除时间（非空=已删除），30分钟后物理清除
+    deleted_by: Mapped[str | None] = mapped_column(String(20), default=None)
+    # 删除来源: "agent" | "manual"
+
     project = relationship("Project", back_populates="photos")

@@ -1,11 +1,14 @@
 """照片管理路由"""
 
+import io
 import os
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
+
+from PIL import Image
 
 from config import MAX_FILE_SIZE, ALLOWED_MIME_TYPES
 from db import get_db
@@ -26,7 +29,7 @@ def list_photos(project_id: str, db: Session = Depends(get_db)):
 
     photos = (
         db.query(Photo)
-        .filter(Photo.project_id == project_id)
+        .filter(Photo.project_id == project_id, Photo.deleted_at.is_(None))
         .order_by(Photo.original_name)
         .all()
     )
@@ -129,9 +132,27 @@ def get_photo_file(
     if not os.path.exists(photo.stored_path):
         raise HTTPException(status_code=404, detail="文件不存在")
 
-    # TODO: 缩略图生成
+    # 缩略图模式：Pillow 缩放后返回内存中的 JPEG
+    if thumb:
+        try:
+            img = Image.open(photo.stored_path)
+            img.thumbnail((size, size), Image.LANCZOS)
+            # 处理 RGBA → RGB（JPEG 不支持透明通道）
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=85)
+            buf.seek(0)
+            return StreamingResponse(
+                buf,
+                media_type="image/jpeg",
+                headers={"Cache-Control": "public, max-age=3600"},
+            )
+        except Exception:
+            # 降级：缩略图生成失败则返回原图
+            pass
 
-    # 下载模式：设置 Content-Disposition 响应头
+    # 原图模式
     headers = {}
     if download:
         encoded_filename = quote(photo.original_name)
@@ -140,7 +161,11 @@ def get_photo_file(
             f"filename*=UTF-8''{encoded_filename}"
         )
 
-    return FileResponse(photo.stored_path, media_type=photo.mime_type, headers=headers if headers else None)
+    return FileResponse(
+        photo.stored_path,
+        media_type=photo.mime_type,
+        headers=headers if headers else None,
+    )
 
 
 # ── V2.1 对比端点 ─────────────────────────────────────────────────
@@ -214,3 +239,86 @@ def _photo_to_compare_dict(photo: Photo) -> dict:
         "dhash": photo.dhash,
         "source_type": photo.source_type,
     }
+
+
+# ── V3.1: 回收站/恢复端点 ────────────────────────────────────────
+
+from datetime import datetime, timedelta
+
+recycle_router = APIRouter(prefix="/api/photos", tags=["recycle"])
+
+
+@recycle_router.get("/recycle-bin")
+def list_deleted_photos(project_id: str | None = None, db: Session = Depends(get_db)):
+    """列出回收站中的软删除照片"""
+    query = db.query(Photo).filter(Photo.deleted_at.isnot(None))
+    if project_id:
+        query = query.filter(Photo.project_id == project_id)
+    photos = query.order_by(Photo.deleted_at.desc()).all()
+
+    now = datetime.now()
+    return {
+        "count": len(photos),
+        "photos": [
+            {
+                "id": p.id,
+                "original_name": p.original_name,
+                "file_size_mb": round((p.file_size or 0) / 1048576, 2),
+                "thumbnail_url": f"/api/projects/photos/{p.id}/file?thumb=true&size=200",
+                "deleted_at": p.deleted_at.isoformat() if p.deleted_at else None,
+                "deleted_by": p.deleted_by,
+                "minutes_remaining": max(0, 30 - int((now - p.deleted_at).total_seconds() / 60)) if p.deleted_at else 0,
+            }
+            for p in photos
+        ],
+    }
+
+
+@recycle_router.post("/restore")
+def restore_photos_endpoint(photo_ids: list[str], db: Session = Depends(get_db)):
+    """从回收站恢复照片"""
+    restored = []
+    failed = []
+
+    for pid in photo_ids:
+        photo = db.query(Photo).filter(Photo.id == pid).first()
+        if not photo:
+            failed.append({"photo_id": pid, "reason": "照片不存在"})
+            continue
+        if photo.deleted_at is None:
+            failed.append({"photo_id": pid, "reason": "照片未被删除"})
+            continue
+        photo.deleted_at = None
+        photo.deleted_by = None
+        restored.append(pid)
+
+    db.commit()
+    return {
+        "success": len(failed) == 0,
+        "restored_count": len(restored),
+        "failed": failed,
+    }
+
+
+@recycle_router.post("/purge-expired")
+def purge_expired_photos_endpoint(db: Session = Depends(get_db)):
+    """物理删除超过 30 分钟的软删除照片"""
+    threshold = datetime.now() - timedelta(minutes=30)
+    expired = (
+        db.query(Photo)
+        .filter(Photo.deleted_at <= threshold)
+        .all()
+    )
+
+    purged = 0
+    for p in expired:
+        if os.path.exists(p.stored_path):
+            try:
+                os.remove(p.stored_path)
+            except OSError:
+                pass
+        db.delete(p)
+        purged += 1
+
+    db.commit()
+    return {"purged_count": purged, "message": f"已物理删除 {purged} 张过期照片"}
